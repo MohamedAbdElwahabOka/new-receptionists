@@ -1,38 +1,32 @@
 import { NextResponse } from "next/server";
 
-export function middleware(request) {
-  // 1. هات قيمة الكوكي
-  const verify = request.cookies.get("loggedin");
-  
-  // 2. هات المسار اللي اليوزر عاوز يروحه
-  const { pathname } = request.nextUrl;
+// هنا حط الصفحات اللي عاوز تحميها
+const protectedRoutes = ["/FrontPage"];
 
-  // 3. حدد الصفحات اللي محتاجة حماية (مثلاً أي حاجة بتبدأ بـ FrontPage)
-  if (pathname.startsWith('/FrontPage')) {
+export default function middleware(req) {
+    // 1. نجيب حالة تسجيل الدخول من الكوكيز (البديل الآمن لـ sessionStatus)
+    const verify = req.cookies.get("loggedin");
     
-    // لو الكوكي مش موجودة أصلاً، أو قيمتها false
-    if (!verify || verify.value === 'false') {
-      
-      // توجيه للصفحة الرئيسية (Login)
-      // new URL('/', request.url) -> دي الطريقة السحرية اللي بتشتغل في أي مكان
-      return NextResponse.redirect(new URL('/', request.url));
+    // بنعتبره مش مسجل لو الكوكي مش موجودة أو قيمتها 'false'
+    const isNotLoggedIn = !verify || verify.value === 'false';
+
+    // 2. نتأكد هل إحنا في صفحة محمية ولا لأ
+    // استخدمنا some & startsWith عشان لو فيه /FrontPage/dashboard يلقطها برضه
+    const isProtectedRoute = protectedRoutes.some(route => 
+        req.nextUrl.pathname.startsWith(route)
+    );
+
+    // 3. اللوجيك: لو الصفحة محمية + المستخدم مش مسجل دخول -> ارجع لصفحة الدخول
+    if (isNotLoggedIn && isProtectedRoute) {
+        const absoluteURL = new URL("/", req.nextUrl.origin);
+        return NextResponse.redirect(absoluteURL.toString());
     }
-  }
 
-  // 4. لو عدى من الشروط اللي فوق، أو رايح صفحة مش محمية -> عدي يا بطل
-  return NextResponse.next();
+    // 4. ضروري جداً: لو مفيش إعادة توجيه، اسمح بالمرور (عشان ميجبش 500 Error)
+    return NextResponse.next();
 }
 
-// 5. (اختياري بس مستحسن) حدد الميدل وير يشتغل فين بالظبط عشان ما يتقلش الموقع
+// الـ config عشان الأداء يبقي سريع وميشتغلش على الصور
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
-}
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
